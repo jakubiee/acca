@@ -89,12 +89,6 @@ class Pin:
         self._pin.value(val)  # type: ignore
         return self
 
-def check_address(func):
-    def wrapper(self, *args, **kwargs):
-        if self.addr is None:
-            raise ValueError("No I2C device address found.")
-        return func(self, *args, **kwargs)
-    return wrapper
 
 class I2C_ACCA:
     def __init__(self, id: int, sda_pin: Pin, scl_pin: Pin, baudrate: int) -> None:
@@ -103,15 +97,14 @@ class I2C_ACCA:
         self.scl_pin = scl_pin
         self.baudrate = baudrate
         self.i2c = I2C(id, sda=sda_pin, scl=scl_pin, freq=baudrate)
-        self.addr = self.get_addr()
+        self.addr = self._get_addr()
 
-    def get_addr(self):
+    def _get_addr(self):
         addr = self.i2c.scan()
         if not addr:
-            return None
+            raise Exception("No device found")
         return addr[0]
 
-    @check_address
     def send(self, data, stop=True):
         try:
             return self.i2c.writeto(self.addr, data, stop)
@@ -119,7 +112,6 @@ class I2C_ACCA:
             print(f"Error sending data: {e}")
             raise
 
-    @check_address
     def read(self, nbytes, stop=True):
         try:
             data = self.i2c.readfrom(self.addr, nbytes, stop)
@@ -232,7 +224,6 @@ class AD7801_I2C(I2C_ACCA):
     ) -> None:
         super().__init__(id=id, sda_pin=sda_pin, scl_pin=scl_pin, baudrate=baudrate)
 
-    @check_address
     def set_value(self, channel: int, value: int):
         try:
             return self.send(bytearray([channel, value]))
@@ -270,7 +261,6 @@ class AD7819_I2C(I2C_ACCA):
         time.sleep_us(1)
         self.conv_pin.value(1)
 
-    @check_address
     def read(self, sample):
         data = []
         for i in range(sample):
