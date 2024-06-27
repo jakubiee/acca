@@ -1,7 +1,8 @@
 import time
+import rp2
 from onewire import OneWire  # type: ignore
 from ds18x20 import DS18X20  # type: ignore
-from machine import I2C, SoftSPI, Pin as MachinePin  # type: ignore
+from machine import I2C, PWM,SoftSPI, Pin as MachinePin  # type: ignore
 from typing import Literal, Optional
 from typing_extensions import Annotated, Doc
 
@@ -91,7 +92,27 @@ class Pin:
 
 
 class I2C_ACCA:
+    """
+    A class to interface with I2C devices.
+
+    ## Example
+    ```python
+    from acca import I2C_ACCA, Pin
+
+    i2c = I2C_ACCA(0, Pin(8), Pin(9), 400000)
+    i2c.send(b"Hello")
+    ```
+    """
+
     def __init__(self, id: int, sda_pin: Pin, scl_pin: Pin, baudrate: int) -> None:
+        """
+        Initializes the I2C_ACCA instance.
+
+        :param id: The I2C bus ID.
+        :param sda_pin: The pin used for SDA.
+        :param scl_pin: The pin used for SCL.
+        :param baudrate: The communication baud rate.
+        """
         self.id = id
         self.sda_pin = sda_pin
         self.scl_pin = scl_pin
@@ -100,12 +121,26 @@ class I2C_ACCA:
         self.addr = self._get_addr()
 
     def _get_addr(self):
+        """
+        Scans for I2C devices and returns the address of the first device found.
+
+        :return: The address of the first I2C device found.
+        :raises Exception: If no device is found.
+        """
         addr = self.i2c.scan()
         if not addr:
             raise Exception("No device found")
         return addr[0]
 
     def send(self, data, stop=True):
+        """
+        Sends data to the I2C device.
+
+        :param data: The data to send.
+        :param stop: Whether to send a stop condition after the data. Default is True.
+        :return: The result of the writeto operation.
+        :raises Exception: If there is an error sending data.
+        """
         try:
             return self.i2c.writeto(self.addr, data, stop)
         except Exception as e:
@@ -113,6 +148,14 @@ class I2C_ACCA:
             raise
 
     def read(self, nbytes, stop=True):
+        """
+        Reads data from the I2C device.
+
+        :param nbytes: The number of bytes to read.
+        :param stop: Whether to send a stop condition after reading. Default is True.
+        :return: The data read from the I2C device.
+        :raises Exception: If there is an error reading data.
+        """
         try:
             data = self.i2c.readfrom(self.addr, nbytes, stop)
             return data
@@ -131,7 +174,6 @@ class I2C_ACCA:
             f"SDA pin: {self.sda_pin}\n"
             f"Device address: {self.addr}"
         )
-
 class SPI_ACCA:
     def __init__(
         self, key: int, baudrate: int, sck: Pin, mosi: Pin, miso: Pin, cs: Pin
@@ -166,6 +208,42 @@ class SPI_ACCA:
             f"CS pin: {self.cs}"
         )
 
+class AD8821(I2C_ACCA):
+    def __init__(self, id: int = 1, sda_pin: Pin = Pin(3), scl_pin: Pin = Pin(2), baudrate: int = 100000):
+        super().__init__(id, sda_pin, scl_pin, baudrate)
+
+    def set_value(self, MSB: int, LSB: int):
+        try:
+            return self.send(bytearray([MSB, LSB]))
+        except Exception as e:
+            print(f"Failed to set value: {e}")
+
+class AD5282(I2C_ACCA):
+    def __init__(self, id: int = 1, sda_pin: Pin = Pin(7), scl_pin: Pin = Pin(6), baudrate: int = 100000):
+        super().__init__(id, sda_pin, scl_pin, baudrate)
+
+    def set_value(self, MSB: int, LSB: int):
+        try:
+            return self.send(bytearray([MSB, LSB]))
+        except Exception as e:
+            print(f"Failed to set value: {e}")
+
+class MCP4706_I2C(I2C_ACCA):
+    def __init__(self, id: int = 1, sda_pin: Pin = Pin(19), scl_pin: Pin = Pin(18), baudrate: int = 100000):
+        super().__init__(id=id, sda_pin=sda_pin, scl_pin=scl_pin, baudrate=baudrate)
+
+    def set_value(self, MSB: int, LSB: int):
+        try:
+            return self.send(bytearray([MSB, LSB]))
+        except Exception as e:
+            print(f"Failed to set value: {e}")
+
+class PWM_ACCA(PWM):
+    def __init__(self, pin: Pin = Pin(17), freq: int = 1000, duty: int = 32768):
+        self.pin = pin
+        self.pwm = PWM(pin)
+        self.pwm.freq(freq)
+        self.pwm.duty_u16(duty)
 
 class DS18B20_OneWire:
     def __init__(self, pin: Pin):
@@ -213,6 +291,75 @@ class MCP3461_SPI(SPI_ACCA):
             time.sleep_us(1)  # type: ignore
         return data
 
+
+class AD7801_Parallel:
+    def __init__(
+        self,
+        b0: int = 6,
+        b1: int = 7,
+        b2: int = 8,
+        b3: int = 9,
+        b4: int = 10,
+        b5: int = 11,
+        b6: int = 12,
+        b7: int = 13,
+        wr_pin: int = 14,
+        freq: int = 10000000
+    ):
+        """
+        Initializes the AD7801 parallel interface.
+
+        :param b0-b7: Pins for data bits (8 pins)
+        :param wr_pin: Pin used for the WR signal
+        :param freq: Frequency for the state machine
+        """
+        self.freq = freq
+        self.data_pins = [
+            Pin(b0, Pin.OUT),
+            Pin(b1, Pin.OUT),
+            Pin(b2, Pin.OUT),
+            Pin(b3, Pin.OUT),
+            Pin(b4, Pin.OUT),
+            Pin(b5, Pin.OUT),
+            Pin(b6, Pin.OUT),
+            Pin(b7, Pin.OUT)
+        ]
+        self.wr_pin = Pin(wr_pin, Pin.OUT)
+
+        @rp2.asm_pio(set_init=(rp2.PIO.OUT_HIGH, rp2.PIO.OUT_HIGH),
+                     out_init=(rp2.PIO.OUT_LOW,) * 8, out_shiftdir=rp2.PIO.SHIFT_RIGHT)
+        def smproc():
+            wrap_target()
+            pull()
+            out(pins, 8)
+            set(pins, 0b00) [5]
+            set(pins, 0b11)
+            wrap()
+
+        self.sm = rp2.StateMachine(0, smproc, freq=freq, set_base=self.wr_pin, out_base=self.data_pins[0])
+        self.sm.active(1)
+        self.sm.put(0)
+
+    def set_value(self, value: int):
+        """
+        Sets the DAC value.
+
+        :param value: 8-bit value to be set on the DAC
+        """
+        if not (0 <= value <= 255):
+            raise ValueError("Value must be between 0 and 255")
+        self.sm.put(value)
+        time.sleep_us(1)
+
+    def show_parameters(self):
+        """
+        Prints the AD7801 parameters.
+        """
+        print(
+            f"Data pins: {[pin for pin in self.data_pins]}\n"
+            f"WR pin: {self.wr_pin}\n"
+            f"State Machine Frequency: {self.freq} Hz"
+        )
 
 class AD7801_I2C(I2C_ACCA):
     def __init__(
