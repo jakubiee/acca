@@ -3,5 +3,5 @@
 /venv
 .mypy_cache
 .ruff_cache
-s.DS_Store
+.DS_Store
 /site
