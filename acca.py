@@ -2,106 +2,25 @@ import time
 import rp2
 from onewire import OneWire  # type: ignore
 from ds18x20 import DS18X20  # type: ignore
-from machine import I2C, PWM, SoftSPI, Pin as MachinePin  # type: ignore
-from typing import Literal, Optional
-from typing_extensions import Annotated, Doc
+from machine import I2C, PWM, SoftSPI, Pin  # type: ignore
 
-
-class Pin:
-    """
-    Pin class, a simple class to emulate the machine.Pin.
-
-    Attributes:
-        OUT (int): Output mode.
-        IN (int): Input mode.
-
-    Example:
-        led = Pin(2, Pin.OUT, 1)
-    """
-
-    OUT = MachinePin.OUT
-    IN = MachinePin.IN
-
-    def __init__(
-        self,
-        pin: Annotated[int, Doc("Pin number")],
-        mode: Optional[Annotated[int, Doc("Pin mode (input or output)")]] = None,
-        value: Optional[Annotated[int, Doc("Initial value of the pin")]] = None,
-    ) -> None:
-        """
-        Initializes the Pin instance.
-
-        Args:
-            pin (int): Pin number.
-            mode (int, optional): Pin mode (input or output). Defaults to None.
-            value (int, optional): Initial value of the pin. Defaults to None.
-        """
-        self._pin = MachinePin(pin)
-        if mode is not None:
-            self.mode(mode)
-        if value is not None:
-            self.value(value)
-
-    def mode(self, mode: Optional[int] = None) -> "Pin":
-        """
-        Sets or gets the mode of the pin.
-
-        Args:
-            mode (int, optional): Pin mode to set (input or output). Defaults to None.
-
-        Returns:
-            Pin: The Pin instance for method chaining.
-
-        Raises:
-            ValueError: If the mode is not valid.
-        """
-        if mode is None:
-            return self._pin.mode()  # type: ignore
-        if mode not in [MachinePin.IN, MachinePin.OUT]:
-            raise ValueError("Invalid mode")
-        self._pin.mode(mode)  # type: ignore
-        return self
-
-    def value(self, val: Optional[int] = None) -> "Pin":
-        """
-        Sets or gets the value of the pin.
-
-        Args:
-            val (int, optional): Value to set (0 or 1). Defaults to None.
-
-        Returns:
-            Pin: The Pin instance for method chaining.
-
-        Raises:
-            TypeError: If the value is not an integer.
-        """
-        if val is None:
-            return self._pin.value()  # type: ignore
-        if not isinstance(val, int):
-            raise TypeError("Pin value must be an integer")
-        self._pin.value(val)  # type: ignore
-        return self
 
 
 class I2C_ACCA:
     """
     A class to interface with I2C devices.
 
+    Args:
+        id (int): The I2C bus ID.
+        sda_pin (Pin): The pin used for SDA.
+        scl_pin (Pin): The pin used for SCL.
+        baudrate (int): The communication baud rate.
+    
     Example:
-        i2c = I2C_ACCA(0, Pin(8), Pin(9), 400000)
-        i2c.send(b"Hello")
+        dac = I2C_ACCA(0, Pin(8), Pin(9), 400000)
     """
 
-    def __init__(self, id: int, sda_pin: Pin, scl_pin: Pin, baudrate: int) -> None:
-        """
-        Initializes the I2C_ACCA instance.
-
-        Args:
-            id (int): The I2C bus ID.
-            sda_pin (Pin): The pin used for SDA.
-            scl_pin (Pin): The pin used for SCL.
-            baudrate (int): The communication baud rate.
-        """
+    def __init__(self, id: int, sda_pin, scl_pin, baudrate: int) -> None:
         self.id = id
         self.sda_pin = sda_pin
         self.scl_pin = scl_pin
@@ -169,14 +88,7 @@ class I2C_ACCA:
         """
         Prints the I2C parameters.
         """
-        print(
-            f"ID: {self.id}\n"
-            f"Frequency: {self.baudrate}\n"
-            f"SCL pin: {self.scl_pin}\n"
-            f"SDA pin: {self.sda_pin}\n"
-            f"Device address: {self.addr}"
-        )
-
+        print(f" ID: {self.id}\nFrequency: {self.baudrate}\nSCL pin: {self.scl_pin}\nSDA pin: {self.sda_pin}\nDevice address: {self.addr}")
 
 class SPI_ACCA:
     """
@@ -189,6 +101,9 @@ class SPI_ACCA:
         mosi (Pin): The pin used for MOSI.
         miso (Pin): The pin used for MISO.
         cs (Pin): The pin used for CS.
+
+    Example:
+        dac = SPI_ACCA(0, 1000000, Pin(2), Pin(3), Pin(4), Pin(5))
     """
 
     def __init__(
@@ -200,7 +115,7 @@ class SPI_ACCA:
         self.mosi = mosi
         self.miso = miso
         self.cs = cs
-        self.cs.mode(Pin.OUT).value
+        self.cs.init(Pin.OUT, value=1)
 
         self.spi = SoftSPI(
             baudrate=baudrate,
@@ -216,12 +131,7 @@ class SPI_ACCA:
         Prints the SPI parameters.
         """
         print(
-            f"Key: {self.key}\n"
-            f"Frequency: {self.baudrate}\n"
-            f"SCK pin: {self.sck}\n"
-            f"MOSI pin: {self.mosi}\n"
-            f"MISO pin: {self.miso}\n"
-            f"CS pin: {self.cs}"
+            f"Key: {self.key}\nFrequency: {self.baudrate}\nSCK pin: {self.sck}\nMOSI pin: {self.mosi}\nMISO pin: {self.miso}\nCS pin: {self.cs}"
         )
 
 
@@ -229,21 +139,17 @@ class AD8821(I2C_ACCA):
     """
     A class to interface with the AD8821 digital potentiometer via I2C.
 
+    Args:
+        id (int, optional): The I2C bus ID. Defaults to 1.
+        sda_pin (Pin, optional): The pin used for SDA. Defaults to Pin(3).
+        scl_pin (Pin, optional): The pin used for SCL. Defaults to Pin(2).
+        baudrate (int, optional): The communication baud rate. Defaults to 100000.
+    
     Example:
         ad8821 = AD8821(1, Pin(3), Pin(2), 100000)
-        ad8821.set_value(0x12, 0x34)
     """
 
     def __init__(self, id: int = 1, sda_pin: Pin = Pin(3), scl_pin: Pin = Pin(2), baudrate: int = 100000):
-        """
-        Initializes the AD8821 instance.
-
-        Args:
-            id (int, optional): The I2C bus ID. Defaults to 1.
-            sda_pin (Pin, optional): The pin used for SDA. Defaults to Pin(3).
-            scl_pin (Pin, optional): The pin used for SCL. Defaults to Pin(2).
-            baudrate (int, optional): The communication baud rate. Defaults to 100000.
-        """
         super().__init__(id, sda_pin, scl_pin, baudrate)
 
     def set_value(self, MSB: int, LSB: int):
@@ -275,6 +181,9 @@ class AD5282(I2C_ACCA):
         sda_pin (Pin, optional): The pin used for SDA. Defaults to Pin(7).
         scl_pin (Pin, optional): The pin used for SCL. Defaults to Pin(6).
         baudrate (int, optional): The communication baud rate. Defaults to 100000.
+
+    Example:
+        ad5282 = AD5282(1, Pin(7), Pin(6), 100000)
     """
 
     def __init__(self, id: int = 1, sda_pin: Pin = Pin(7), scl_pin: Pin = Pin(6), baudrate: int = 100000):
@@ -309,9 +218,12 @@ class MCP4706_I2C(I2C_ACCA):
         sda_pin (Pin, optional): The pin used for SDA. Defaults to Pin(19).
         scl_pin (Pin, optional): The pin used for SCL. Defaults to Pin(18).
         baudrate (int, optional): The communication baud rate. Defaults to 100000.
+
+    Example:
+        mcp4706 = MCP4706_I2C(1, Pin(19), Pin(18), 100000)
     """
 
-    def __init__(self, id: int = 1, sda_pin: Pin = Pin(19), scl_pin: Pin = Pin(18), baudrate: int = 100000):
+    def __init__(self, id: int = 1, sda_pin: Pin = Pin(18), scl_pin: Pin = Pin(19), baudrate: int = 100000):
         super().__init__(id=id, sda_pin=sda_pin, scl_pin=scl_pin, baudrate=baudrate)
 
     def set_value(self, MSB: int, LSB: int):
@@ -342,6 +254,9 @@ class PWM_ACCA(PWM):
         pin (Pin, optional): The pin used for PWM. Defaults to Pin(17).
         freq (int, optional): The PWM frequency. Defaults to 1000.
         duty (int, optional): The PWM duty cycle. Defaults to 32768.
+
+    Example:
+        pwm = PWM_ACCA(Pin(17), 1000, 32768)
     """
 
     def __init__(self, pin: Pin = Pin(17), freq: int = 1000, duty: int = 32768):
@@ -350,7 +265,81 @@ class PWM_ACCA(PWM):
         self.pwm.freq(freq)
         self.pwm.duty_u16(duty)
 
+class MCP3221_I2C(I2C_ACCA):
+    """
+    A class to interface with the MCP3221 analog-to-digital converter via I2C.
 
+    Args:
+        id (int, optional): The I2C bus ID. Defaults to 1.
+        sda_pin (Pin, optional): The pin used for SDA. Defaults to Pin(18).
+        scl_pin (Pin, optional): The pin used for SCL. Defaults to Pin(19).
+        baudrate (int, optional): The communication baud rate. Defaults to 100000.
+
+    Example:
+        mcp3221 = MCP3221_I2C(1, Pin(18), Pin(19), 100000)
+    """
+    def __init__(self, id: int = 1, sda_pin: Pin = Pin(18), scl_pin: Pin = Pin(19), baudrate: int = 100000):
+        super().__init__(id, sda_pin, scl_pin, baudrate)
+
+    def read_sample(self, bytes_number: int = 2):
+        """
+        Reads data from the MCP3221.
+
+        Args:
+            bytes_number (int, optional): The number of bytes to read. Defaults to 2.
+        """
+        data = self.read(bytes_number)
+        return int.from_bytes(data, "big")
+    
+class MCP3461_SPI(SPI_ACCA):
+    """
+    A class to interface with the MCP3461 analog-to-digital converter via SPI.
+
+    Args:
+        key (int, optional): The SPI bus key. Defaults to 0.
+        baudrate (int, optional): The communication baud rate. Defaults to 1000000.
+        sck (Pin, optional): The pin used for SCK. Defaults to Pin(2).
+        mosi (Pin, optional): The pin used for MOSI. Defaults to Pin(3).
+        miso (Pin, optional): The pin used for MISO. Defaults to Pin(4).
+        cs (Pin, optional): The pin used for CS. Defaults to Pin(5).
+    """
+
+    def __init__(
+        self,
+        key: int = 0,
+        baudrate: int = 1000000,
+        sck: Pin = Pin(2),
+        mosi: Pin = Pin(3),
+        miso: Pin = Pin(4),
+        cs: Pin = Pin(5),
+    ):
+        super().__init__(key, baudrate, sck, mosi, miso, cs)
+
+    def write(self, message: list):
+        """
+        Writes a message to the MCP3461 via SPI.
+
+        Args:
+            message (list): The message to write.
+        """
+        self.cs.value(0)
+        self.spi.write(bytearray(message))
+        self.cs.value(1)
+        time.sleep_us(1)  # type: ignore
+
+    def read(self):
+        """
+        Reads data from the MCP3461 via SPI.
+
+        Returns:
+            bytes: The data read from the MCP3461.
+        """
+        self.cs.value(0)
+    
+        message = self.spi.read(6)
+        time.sleep_us(1)  # type: ignore
+        return message
+    
 class DS18B20_OneWire:
     """
     A class to interface with the DS18B20 temperature sensor via OneWire.
@@ -395,62 +384,7 @@ class DS18B20_OneWire:
             return [self.ds.read_temp(self.addr), self.ds.read_scratch(self.addr)]
         return self.ds.read_temp(self.addr)
 
-
-class MCP3461_SPI(SPI_ACCA):
-    """
-    A class to interface with the MCP3461 analog-to-digital converter via SPI.
-
-    Args:
-        key (int, optional): The SPI bus key. Defaults to 0.
-        baudrate (int, optional): The communication baud rate. Defaults to 1000000.
-        sck (Pin, optional): The pin used for SCK. Defaults to Pin(2).
-        mosi (Pin, optional): The pin used for MOSI. Defaults to Pin(3).
-        miso (Pin, optional): The pin used for MISO. Defaults to Pin(4).
-        cs (Pin, optional): The pin used for CS. Defaults to Pin(5).
-    """
-
-    def __init__(
-        self,
-        key: int = 0,
-        baudrate: int = 1000000,
-        sck: Pin = Pin(2),
-        mosi: Pin = Pin(3),
-        miso: Pin = Pin(4),
-        cs: Pin = Pin(5),
-    ):
-        super().__init__(key, baudrate, sck, mosi, miso, cs)
-
-    def write(self, message: list):
-        """
-        Writes a message to the MCP3461 via SPI.
-
-        Args:
-            message (list): The message to write.
-        """
-        self.cs.value(0)
-        self.spi.write(bytearray(message))
-        self.cs.value(1)
-        time.sleep_us(1)  # type: ignore
-
-    def read(self, sample: int):
-        """
-        Reads data from the MCP3461 via SPI.
-
-        Args:
-            sample (int): The number of samples to read.
-
-        Returns:
-            list: The data read from the MCP3461.
-        """
-        self.cs.value(0)
-        data = []
-        for i in range(sample):
-            data.append(self.spi.read(4))
-            time.sleep_us(1)  # type: ignore
-        return data
-
-
-class AD7801_Parallel:
+class AD7801_PARALLEL:
     """
     A class to interface with the AD7801 digital-to-analog converter via parallel interface.
 
@@ -520,11 +454,8 @@ class AD7801_Parallel:
         Prints the AD7801 parameters.
         """
         print(
-            f"Data pins: {[pin for pin in self.data_pins]}\n"
-            f"WR pin: {self.wr_pin}\n"
-            f"State Machine Frequency: {self.freq} Hz"
+            f"Data pins: {[pin for pin in self.data_pins]}\nWR pin: {self.wr_pin}\nState Machine Frequency: {self.freq} Hz"
         )
-
 
 class AD7801_I2C(I2C_ACCA):
     """
@@ -542,7 +473,7 @@ class AD7801_I2C(I2C_ACCA):
         id: int,
         sda_pin: Pin,
         scl_pin: Pin,
-        baudrate: Literal[10000, 100000, 400000] = 400000,
+        baudrate: int = 400000,
     ) -> None:
         super().__init__(id=id, sda_pin=sda_pin, scl_pin=scl_pin, baudrate=baudrate)
 
@@ -621,23 +552,17 @@ class AD7819_I2C(I2C_ACCA):
         time.sleep_us(1)
         self.conv_pin.value(1)
 
-    def read(self, sample):
+    def read_sample(self):
         """
         Reads data from the AD7819.
 
-        Args:
-            sample (int): The number of samples to read.
-
         Returns:
-            list: The data read from the AD7819.
+            bytes: The data read from the AD7819.
         """
-        data = []
-        for i in range(sample):
-            self._set_high()
-            self._start_conversion()
-            self.rd_pin.value(0)
-            self.cs_pin.value(0)
-            message = self.i2c.readfrom(self.addr, 2)
-            time.sleep_us(50)
-            data.append(message)
-        return data
+        self._set_high()
+        self._start_conversion()
+        self.rd_pin.value(0)
+        self.cs_pin.value(0)
+        message = self.i2c.readfrom(self.addr, 2)
+        time.sleep_us(50)
+        return message

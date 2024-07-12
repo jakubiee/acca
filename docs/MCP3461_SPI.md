@@ -1,0 +1,3 @@
+# MCP3461 (SPI)
+
+:::acca.MCP3461_SPI
